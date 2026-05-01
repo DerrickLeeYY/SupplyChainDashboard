@@ -9,13 +9,6 @@ import sys
 
 st.set_page_config(page_title="Walmart Sales Dashboard", layout="wide")
 
-st.write("Python version:", sys.version)
-st.write("Files in app folder:", os.listdir())
-st.write("Parquet exists:", os.path.exists("cleaned_m5_dashboard_data.parquet"))
-
-
-
-
 @st.cache_data
 def load_data():
     df = pd.read_parquet(
