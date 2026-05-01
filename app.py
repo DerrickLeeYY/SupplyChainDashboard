@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from sklearn.linear_model import LinearRegression
 
 st.set_page_config(page_title="Walmart Sales Dashboard", layout="wide")
 
@@ -20,6 +19,9 @@ def load_dashboard_data():
     df["sales"] = df["sales"].astype("int32")
     df["revenue"] = df["revenue"].astype("float32")
 
+    for col in ["state_id", "store_id", "cat_id", "weekday"]:
+        df[col] = df[col].astype("category")
+
     return df
 
 
@@ -31,6 +33,9 @@ def load_product_data():
     df["month_start"] = pd.to_datetime(df["month_start"])
     df["sales"] = df["sales"].astype("int32")
 
+    for col in ["state_id", "store_id", "cat_id", "item_id"]:
+        df[col] = df[col].astype("category")
+
     return df
 
 
@@ -41,6 +46,7 @@ def load_price_data():
     df["sell_price"] = df["sell_price"].astype("float32")
     df["avg_sales"] = df["avg_sales"].astype("float32")
     df["total_sales"] = df["total_sales"].astype("int32")
+    df["item_id"] = df["item_id"].astype("category")
 
     return df
 
@@ -55,8 +61,6 @@ def bar_chart(data, x, y, title):
 
 
 dashboard_df = load_dashboard_data()
-product_df = load_product_data()
-price_df = load_price_data()
 
 st.title("MA6721 Group 1 CA3 M5 Sales Dashboard")
 st.write(
@@ -108,6 +112,13 @@ filtered_df = dashboard_df[
     (dashboard_df["cat_id"].isin(cat_filter))
 ]
 
+if filtered_df.empty:
+    st.warning("No data available for the selected filters.")
+    st.stop()
+
+# Product data is loaded only after the main dashboard data is ready
+product_df = load_product_data()
+
 filtered_product_df = product_df[
     (product_df["date"] >= start_month) &
     (product_df["date"] <= end_month) &
@@ -115,10 +126,6 @@ filtered_product_df = product_df[
     (product_df["store_id"].isin(store_filter)) &
     (product_df["cat_id"].isin(cat_filter))
 ]
-
-if filtered_df.empty:
-    st.warning("No data available for the selected filters.")
-    st.stop()
 
 # KPIs
 cols = st.columns(4)
@@ -129,7 +136,7 @@ cols[3].metric("No. of Products", f"{filtered_product_df['item_id'].nunique():,}
 
 st.divider()
 
-# Revenue overview
+# Revenue Overview
 st.subheader("Revenue Overview")
 
 monthly_revenue = filtered_df.groupby("month_start", as_index=False)["revenue"].sum()
@@ -159,13 +166,19 @@ with rev_col2:
 
     full_monthly["t"] = np.arange(len(full_monthly))
 
-    model = LinearRegression()
-    model.fit(full_monthly[["t"]], full_monthly["revenue"])
+    slope, intercept = np.polyfit(
+        full_monthly["t"],
+        full_monthly["revenue"],
+        1
+    )
 
     target_month = pd.Timestamp("2016-04-01")
-    t_val = full_monthly.loc[full_monthly["month_start"] == target_month, "t"].iloc[0]
+    t_val = full_monthly.loc[
+        full_monthly["month_start"] == target_month,
+        "t"
+    ].iloc[0]
 
-    target = model.predict([[t_val]])[0]
+    target = slope * t_val + intercept
     actual = dashboard_df[dashboard_df["month_start"] == target_month]["revenue"].sum()
 
     progress = actual / target if target > 0 else 0
@@ -202,7 +215,7 @@ if month_count >= 12:
 
 st.divider()
 
-# Sales trend
+# Sales Trend
 st.subheader("Sales Trend")
 
 daily_sales = filtered_df.groupby("date", as_index=False)["sales"].sum()
@@ -218,7 +231,7 @@ st.plotly_chart(fig, use_container_width=True)
 
 st.divider()
 
-# Category and state
+# Category and State
 col1, col2 = st.columns(2)
 
 with col1:
@@ -244,10 +257,9 @@ with col2:
         title="Sales Distribution by State",
         hole=0.4
     )
-
     st.plotly_chart(fig, use_container_width=True)
 
-# Top stores and products side by side
+# Top Stores and Products
 col1, col2 = st.columns(2)
 
 with col1:
@@ -276,7 +288,7 @@ with col2:
 
     bar_chart(top_products, "sales", "item_id", "Top 10 Products by Sales")
 
-# Weekday analysis
+# Weekday Analysis
 st.subheader("Sales by Weekday")
 
 weekday_order = [
@@ -306,13 +318,15 @@ st.plotly_chart(fig, use_container_width=True)
 
 st.divider()
 
-# Price sensitivity
+# Price Sensitivity
 st.subheader("Price Sensitivity")
 
 st.write(
     "This estimates how sales may change when price changes using a simple log-log regression. "
     "It is useful for analysis, but it does not prove causation."
 )
+
+price_df = load_price_data()
 
 valid_products = (
     price_df.groupby("item_id")["sell_price"]
@@ -339,14 +353,14 @@ else:
 
     elasticity_df = price_df[price_df["item_id"] == selected_item].copy()
 
-    X = np.log(elasticity_df[["sell_price"]])
+    X = np.log(elasticity_df["sell_price"])
     y = np.log(elasticity_df["avg_sales"])
 
-    model = LinearRegression()
-    model.fit(X, y)
+    elasticity, intercept = np.polyfit(X, y, 1)
 
-    elasticity = model.coef_[0]
-    elasticity_df["predicted_avg_sales"] = np.exp(model.predict(X))
+    elasticity_df["predicted_avg_sales"] = np.exp(
+        intercept + elasticity * X
+    )
 
     cols = st.columns(2)
     cols[0].metric("Estimated Elasticity", f"{elasticity:.3f}")
@@ -386,6 +400,5 @@ else:
         "Only positive-sales observations are used. This does not prove causation."
     )
 
-# Data preview
 st.subheader("Data Preview")
 st.dataframe(filtered_df.head(1000))
