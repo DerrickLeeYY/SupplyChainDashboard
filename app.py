@@ -29,7 +29,6 @@ def load_dashboard_data():
 def load_product_data():
     df = pd.read_parquet(PRODUCT_FILE)
 
-    df["date"] = pd.to_datetime(df["date"])
     df["month_start"] = pd.to_datetime(df["month_start"])
     df["sales"] = df["sales"].astype("int32")
 
@@ -120,8 +119,8 @@ if filtered_df.empty:
 product_df = load_product_data()
 
 filtered_product_df = product_df[
-    (product_df["date"] >= start_month) &
-    (product_df["date"] <= end_month) &
+    (product_df["month_start"] >= start_month) &
+    (product_df["month_start"] <= pd.Timestamp(end_month.year, end_month.month, 1)) &
     (product_df["state_id"].isin(state_filter)) &
     (product_df["store_id"].isin(store_filter)) &
     (product_df["cat_id"].isin(cat_filter))
