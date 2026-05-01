@@ -4,6 +4,13 @@ import numpy as np
 import plotly.express as px
 from sklearn.linear_model import LinearRegression
 
+import os
+import sys
+
+st.write("Python version:", sys.version)
+st.write("Files in app folder:", os.listdir())
+st.write("Parquet exists:", os.path.exists("cleaned_m5_dashboard_data.parquet"))
+
 st.set_page_config(page_title="Walmart Sales Dashboard", layout="wide")
 
 
